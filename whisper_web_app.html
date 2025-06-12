@@ -506,9 +506,8 @@
         let transcriptHistory = []; // 儲存所有轉錄記錄
         let autoSaveEnabled = false;
         
-        // Google OAuth 2.0 配置 (公用應用程序，可直接使用)
-        const GOOGLE_CLIENT_ID = '1234567890-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com';
-        const GOOGLE_API_KEY = 'AIzaSyABC123def456GHI789jkl012MNO345pqr';
+        // Google OAuth 2.0 配置（請替換為你的 Client ID）
+        const GOOGLE_CLIENT_ID = '1083533684990-3p220v3bj0ejp4sv2ag5bnuqifd7778q.apps.googleusercontent.com';
         const GOOGLE_DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
         const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -1174,30 +1173,47 @@
                 document.getElementById('driveStatus').innerHTML = 
                     '<span style="color: #4285f4;">🔄 正在初始化 Google Drive...</span>';
                 
-                // 檢查 gapi 是否載入
-                if (typeof gapi === 'undefined') {
-                    throw new Error('Google API 腳本未載入，請檢查網路連線');
+                // 檢查 Client ID 是否設定
+                if (GOOGLE_CLIENT_ID.includes('你的_CLIENT_ID') || GOOGLE_CLIENT_ID === 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com') {
+                    throw new Error('請先設定正確的 Google Client ID，參考設定指南');
                 }
                 
-                // 檢查 Client ID 是否設定
-                if (GOOGLE_CLIENT_ID.includes('1234567890') || GOOGLE_CLIENT_ID.includes('YOUR_')) {
-                    throw new Error('請先設定正確的 Google Client ID');
+                // 檢查 gapi 是否載入
+                if (typeof gapi === 'undefined') {
+                    throw new Error('Google API 腳本未載入，請檢查網路連線或廣告攔截器設定');
                 }
                 
                 debugLog('開始載入 Google API...');
                 
+                // 增加更長的逾時時間和更詳細的診斷
                 await new Promise((resolve, reject) => {
                     const timeout = setTimeout(() => {
-                        reject(new Error('Google API 載入逾時'));
-                    }, 10000); // 10秒逾時
+                        reject(new Error('Google API 載入逾時 - 請檢查網路連線、防火牆設定或廣告攔截器'));
+                    }, 20000); // 增加到20秒
                     
-                    gapi.load('api:auth2', () => {
+                    // 檢查 gapi.load 是否可用
+                    if (typeof gapi.load !== 'function') {
                         clearTimeout(timeout);
-                        resolve();
+                        reject(new Error('Google API 腳本不完整，請重新載入頁面'));
+                        return;
+                    }
+                    
+                    debugLog('正在載入 Google API 模組...');
+                    
+                    gapi.load('api:auth2', {
+                        callback: () => {
+                            clearTimeout(timeout);
+                            debugLog('Google API 模組載入成功');
+                            resolve();
+                        },
+                        onerror: () => {
+                            clearTimeout(timeout);
+                            reject(new Error('Google API 模組載入失敗'));
+                        }
                     });
                 });
                 
-                debugLog('Google API 載入成功，開始初始化...');
+                debugLog('Google API 載入成功，開始初始化客戶端...');
                 await initGapi();
                 
                 document.getElementById('driveStatus').innerHTML = 
@@ -1211,12 +1227,108 @@
                     `<span style="color: #ea4335;">❌ 初始化失敗: ${errorMsg}</span>`;
                 debugLog('Google API 初始化錯誤: ' + errorMsg);
                 
-                // 提供重試按鈕
+                // 提供診斷信息和重試按鈕
                 setTimeout(() => {
-                    const retryBtn = '<button onclick="initializeGoogleAPI()" style="margin-left: 10px; padding: 5px 10px; background: #4285f4; color: white; border: none; border-radius: 3px; cursor: pointer;">🔄 重試</button>';
-                    document.getElementById('driveStatus').innerHTML += retryBtn;
+                    let diagnosticInfo = '<div style="margin-top: 10px; padding: 10px; background: #fff3cd; border-radius: 5px; font-size: 12px;">';
+                    diagnosticInfo += '<strong>🔧 診斷提示：</strong><br>';
+                    diagnosticInfo += '1. 檢查網路連線是否正常<br>';
+                    diagnosticInfo += '2. 暫時關閉廣告攔截器<br>';
+                    diagnosticInfo += '3. 嘗試使用無痕模式<br>';
+                    diagnosticInfo += '4. 檢查防火牆設定<br>';
+                    diagnosticInfo += '</div>';
+                    
+                    const retryBtn = '<button onclick="initializeGoogleAPI()" style="margin: 10px 5px 0 0; padding: 8px 16px; background: #4285f4; color: white; border: none; border-radius: 5px; cursor: pointer;">🔄 重試</button>';
+                    const diagBtn = '<button onclick="runDiagnostics()" style="margin: 10px 5px 0 0; padding: 8px 16px; background: #ff9800; color: white; border: none; border-radius: 5px; cursor: pointer;">🔧 診斷網路</button>';
+                    const skipBtn = '<button onclick="skipGoogleDrive()" style="margin: 10px 0 0 0; padding: 8px 16px; background: #666; color: white; border: none; border-radius: 5px; cursor: pointer;">⏭️ 跳過 Google Drive</button>';
+                    
+                    document.getElementById('driveStatus').innerHTML += diagnosticInfo + retryBtn + diagBtn + skipBtn;
                 }, 1000);
             }
+        }
+        
+        // 跳過 Google Drive 功能
+        function skipGoogleDrive() {
+            document.getElementById('driveStatus').innerHTML = 
+                '<span style="color: #ff9800;">⚠️ 已跳過 Google Drive 整合，轉錄功能仍可正常使用</span>';
+            isGoogleAuthInitialized = false;
+            debugLog('用戶選擇跳過 Google Drive 整合');
+        }
+        
+        // 網路診斷工具
+        async function runDiagnostics() {
+            document.getElementById('driveStatus').innerHTML = 
+                '<span style="color: #ff9800;">🔧 正在診斷網路連線...</span>';
+            
+            const results = [];
+            
+            try {
+                // 測試 1：檢查基本網路連線
+                debugLog('測試 1：檢查基本網路連線...');
+                const basicTest = await fetch('https://www.google.com/favicon.ico', { 
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                }).then(() => '✅ 基本網路連線正常').catch(() => '❌ 基本網路連線失敗');
+                results.push(basicTest);
+                
+                // 測試 2：檢查 Google API 可達性
+                debugLog('測試 2：檢查 Google API 可達性...');
+                const apiTest = await fetch('https://apis.google.com/js/api.js', {
+                    method: 'HEAD'
+                }).then(response => 
+                    response.ok ? '✅ Google API 服務可達' : `❌ Google API 回應 ${response.status}`
+                ).catch(error => `❌ Google API 不可達: ${error.message}`);
+                results.push(apiTest);
+                
+                // 測試 3：檢查 Google Accounts 服務
+                debugLog('測試 3：檢查 Google Accounts 服務...');
+                const accountsTest = await fetch('https://accounts.google.com/gsi/client', {
+                    method: 'HEAD'
+                }).then(response => 
+                    response.ok ? '✅ Google Accounts 服務可達' : `❌ Google Accounts 回應 ${response.status}`
+                ).catch(error => `❌ Google Accounts 不可達: ${error.message}`);
+                results.push(accountsTest);
+                
+                // 測試 4：檢查 gapi 全域變數
+                debugLog('測試 4：檢查 Google API 腳本載入...');
+                const gapiTest = typeof gapi !== 'undefined' ? 
+                    '✅ Google API 腳本已載入' : '❌ Google API 腳本未載入';
+                results.push(gapiTest);
+                
+            } catch (error) {
+                results.push(`❌ 診斷過程發生錯誤: ${error.message}`);
+            }
+            
+            // 顯示診斷結果
+            let resultHtml = '<div style="margin-top: 10px; padding: 15px; background: #f8f9fa; border-radius: 5px; font-size: 13px;">';
+            resultHtml += '<strong>🔍 診斷結果：</strong><br>';
+            results.forEach(result => {
+                resultHtml += `${result}<br>`;
+            });
+            
+            // 根據結果提供建議
+            const hasNetworkIssue = results.some(r => r.includes('基本網路'));
+            const hasGoogleBlock = results.some(r => r.includes('Google API 不可達') || r.includes('Google Accounts 不可達'));
+            
+            resultHtml += '<br><strong>💡 建議：</strong><br>';
+            if (hasNetworkIssue) {
+                resultHtml += '• 檢查網路連線<br>';
+            }
+            if (hasGoogleBlock) {
+                resultHtml += '• 可能在受限網路環境（如中國大陸）<br>';
+                resultHtml += '• 嘗試使用 VPN 或代理服務<br>';
+                resultHtml += '• 建議跳過 Google Drive 功能<br>';
+            } else {
+                resultHtml += '• 嘗試關閉廣告攔截器<br>';
+                resultHtml += '• 使用無痕模式<br>';
+                resultHtml += '• 重新載入頁面<br>';
+            }
+            resultHtml += '</div>';
+            
+            const retryBtn = '<button onclick="initializeGoogleAPI()" style="margin: 10px 5px 0 0; padding: 8px 16px; background: #4285f4; color: white; border: none; border-radius: 5px; cursor: pointer;">🔄 重試</button>';
+            const skipBtn = '<button onclick="skipGoogleDrive()" style="margin: 10px 0 0 0; padding: 8px 16px; background: #666; color: white; border: none; border-radius: 5px; cursor: pointer;">⏭️ 跳過 Google Drive</button>';
+            
+            document.getElementById('driveStatus').innerHTML = 
+                '<span style="color: #ff9800;">🔧 診斷完成</span>' + resultHtml + retryBtn + skipBtn;
         }
         
         // 初始化 Google API 客戶端
@@ -1225,7 +1337,6 @@
                 debugLog('正在初始化 Google API 客戶端...');
                 
                 await gapi.client.init({
-                    apiKey: GOOGLE_API_KEY,
                     clientId: GOOGLE_CLIENT_ID,
                     discoveryDocs: [GOOGLE_DISCOVERY_DOC],
                     scope: GOOGLE_SCOPES
@@ -1333,7 +1444,7 @@
             }
             
             try {
-                // 生成檔案內容
+                // 生成完整的轉錄檔案
                 const fileContent = generateTranscriptFile();
                 const fileName = `Whisper轉錄記錄_${new Date().toISOString().split('T')[0]}_${Date.now()}.txt`;
                 
@@ -1344,55 +1455,47 @@
                 };
                 
                 // 上傳檔案
-                const form = new FormData();
-                form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-                form.append('file', new Blob([fileContent], {type: 'text/plain'}));
+                const formData = new FormData();
+                formData.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+                formData.append('file', new Blob([fileContent], {type: 'text/plain'}));
                 
                 const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${googleAccessToken}`
                     },
-                    body: form
+                    body: formData
                 });
                 
                 if (response.ok) {
                     const result = await response.json();
-                    showStatus(`✅ 成功儲存到 Google Drive: ${fileName}`, 'success');
-                    document.getElementById('driveStatus').innerHTML = 
-                        `<span style="color: #34a853;">最後儲存: ${new Date().toLocaleTimeString()} (${transcriptHistory.length} 筆記錄)</span>`;
+                    showStatus(`✅ 成功備份到 Google Drive！檔案名稱：${fileName}`, 'success');
+                    debugLog(`檔案已上傳到 Google Drive，檔案ID: ${result.id}`);
                 } else {
-                    throw new Error('上傳失敗: ' + response.statusText);
+                    const error = await response.json();
+                    throw new Error(error.error?.message || '上傳失敗');
                 }
                 
             } catch (error) {
-                showStatus('儲存到 Google Drive 失敗: ' + error.message, 'error');
-                debugLog('Google Drive 儲存錯誤: ' + error.message);
+                showStatus('Google Drive 備份失敗: ' + error.message, 'error');
+                debugLog('Google Drive 備份錯誤: ' + error.message);
             }
         }
         
         // 生成轉錄檔案內容
         function generateTranscriptFile() {
-            let content = `OpenAI Whisper 即時語音轉文字記錄\n`;
-            content += `生成時間: ${new Date().toLocaleString()}\n`;
-            content += `總記錄數: ${transcriptHistory.length}\n`;
-            content += `=====================================\n\n`;
+            const timestamp = new Date().toLocaleString('zh-TW');
+            let content = `OpenAI Whisper 語音轉錄記錄\n`;
+            content += `生成時間：${timestamp}\n`;
+            content += `總計片段數：${transcriptHistory.length}\n\n`;
+            content += `${'='.repeat(50)}\n\n`;
             
             transcriptHistory.forEach((record, index) => {
-                content += `記錄 ${index + 1} (片段 ${record.segmentId})\n`;
-                content += `時間: ${record.timestamp}\n`;
-                content += `輸入語系: ${record.inputLanguage}\n`;
-                content += `原始文字: ${record.originalText}\n`;
-                
-                if (record.display1Text && record.display1Text !== record.originalText) {
-                    content += `${record.display1Language} 翻譯: ${record.display1Text}\n`;
-                }
-                
-                if (record.display2Text && record.display2Text !== record.originalText && record.display2Text !== record.display1Text) {
-                    content += `${record.display2Language} 翻譯: ${record.display2Text}\n`;
-                }
-                
-                content += `\n${'='.repeat(50)}\n\n`;
+                content += `片段 #${record.segmentId} (${record.timestamp})\n`;
+                content += `輸入語系：${record.inputLanguage}\n`;
+                content += `原文：${record.originalText}\n`;
+                content += `翻譯（${record.display2Language}）：${record.display2Text}\n`;
+                content += `${'-'.repeat(30)}\n`;
             });
             
             return content;
@@ -1410,8 +1513,8 @@
             
             if (autoSaveEnabled) {
                 button.textContent = '🔄 關閉自動備份';
-                button.style.background = '#ea4335';
-                showStatus('✅ 自動備份已開啟，每次轉錄後會自動儲存到 Google Drive', 'success');
+                button.style.background = '#ff9800';
+                showStatus('自動備份已開啟', 'success');
             } else {
                 button.textContent = '🔄 開啟自動備份';
                 button.style.background = '#34a853';
@@ -1419,16 +1522,15 @@
             }
         }
         
-        // 登出 Google
+        // Google 登出
         async function signOutGoogle() {
-            if (isGoogleSignedIn) {
+            try {
                 const authInstance = gapi.auth2.getAuthInstance();
                 await authInstance.signOut();
                 handleSignInChange(false);
-                autoSaveEnabled = false;
-                document.getElementById('autoSaveButton').textContent = '🔄 開啟自動備份';
-                document.getElementById('autoSaveButton').style.background = '#34a853';
-                showStatus('已中斷 Google Drive 連接', 'info');
+                showStatus('已登出 Google 帳號', 'info');
+            } catch (error) {
+                showStatus('登出失敗: ' + error.message, 'error');
             }
         }
     </script>

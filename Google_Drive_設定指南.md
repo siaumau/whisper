@@ -1,79 +1,91 @@
 # 🚀 Whisper 語音轉文字 Google Drive 整合設定指南
 
 ## 📋 前言
-為了讓其他用戶能夠使用 Google Drive 雲端備份功能，你需要設定一個 Google Cloud 專案。設定完成後，任何人都可以直接使用你的應用程序！
+根據 [Google Identity 官方文檔](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid?hl=zh-tw)，我們提供最簡化的設定流程，讓其他用戶能夠輕鬆使用 Google Drive 雲端備份功能！
 
-## ⚡ 快速設定步驟
+## ⚡ 5分鐘快速設定
 
-### 步驟 1：建立 Google Cloud 專案
-1. 前往 [Google Cloud Console](https://console.cloud.google.com/)
-2. 點擊「建立專案」或選擇現有專案
-3. 輸入專案名稱，例如：`Whisper語音轉文字`
+### 步驟 1：開啟 Google API Console
+1. 前往 [Google API Console](https://console.developers.google.com/)
+2. **建立新專案**或選擇現有專案
+3. 專案名稱建議：`Whisper語音轉文字`
 
 ### 步驟 2：啟用 Google Drive API
-1. 在 Google Cloud Console 中，前往「API 和服務」→「程式庫」
-2. 搜尋「Google Drive API」
-3. 點擊進入並按「啟用」
+1. 在左側選單點擊「**程式庫**」
+2. 搜尋「**Google Drive API**」
+3. 點擊進入並按「**啟用**」
 
-### 步驟 3：建立 OAuth 2.0 客戶端 ID
-1. 前往「API 和服務」→「憑證」
-2. 點擊「+ 建立憑證」→「OAuth 2.0 客戶端 ID」
-3. 如果是首次使用，需要先設定「OAuth 同意畫面」：
-   - 選擇「外部」用戶類型
-   - 填寫應用程式名稱：`Whisper語音轉文字`
-   - 填寫用戶支援電子郵件
-   - 開發人員聯絡資訊填寫你的 email
-   - 其他欄位可選填
-4. 回到建立 OAuth 2.0 客戶端 ID：
-   - 應用程式類型：選擇「網頁應用程式」
-   - 名稱：`Whisper Web App`
-   - 已授權的 JavaScript 來源：
-     - `http://localhost:8000`
-     - `http://127.0.0.1:8000`
-     - （如果你有網域，也加入你的網域）
+### 步驟 3：設定 OAuth 同意畫面（首次必做）
+1. 左側選單點擊「**OAuth 同意畫面**」
+2. 選擇「**外部**」→ 建立
+3. **基本資訊**填寫：
+   - 應用程式名稱：`Whisper 語音轉文字`
+   - 用戶支援電子郵件：你的 Gmail
+   - 開發人員聯絡資訊：你的 Gmail
+4. 其他欄位跳過，點擊「**儲存並繼續**」→「**儲存並繼續**」→「**返回控制台**」
 
-### 步驟 4：取得 API 金鑰
-1. 在「憑證」頁面，點擊「+ 建立憑證」→「API 金鑰」
-2. 複製產生的 API 金鑰
-3. （建議）點擊「限制金鑰」，選擇「限制 API」，只選擇「Google Drive API」
+### 步驟 4：建立 OAuth 2.0 客戶端 ID
+1. 左側選單點擊「**憑證**」
+2. 點擊「**+ 建立憑證**」→「**OAuth 2.0 客戶端 ID**」
+3. 應用程式類型：選擇「**網頁應用程式**」
+4. 名稱：`Whisper Web App`
+5. **已授權的 JavaScript 來源**，依序新增：
+   ```
+   http://localhost
+   http://localhost:3000
+   http://localhost:8000
+   http://127.0.0.1
+   file://
+   ```
+   > 💡 這樣設定後可以在任何本機環境使用
 
-### 步驟 5：更新程式碼
-將取得的憑證更新到 `whisper_web_app.html` 檔案中：
+### 步驟 5：複製 Client ID
+1. 建立完成後，會顯示客戶端 ID
+2. **複製**這個 Client ID（格式像：`1234567890-abc123def456.apps.googleusercontent.com`）
+
+### 步驟 6：更新程式碼（只需要 Client ID！）
+根據 Google 官方文檔，我們**不需要 API Key**，只需要 Client ID：
+
+1. 開啟 `whisper_web_app.html`
+2. 找到這行：
+```javascript
+const GOOGLE_CLIENT_ID = '1234567890-abcdefghijklmnopqrstuvwxyz123456.apps.googleusercontent.com';
+```
+3. **替換為你的真實 Client ID**
+
+### 步驟 7：移除 API Key 依賴
+由於使用 Google Identity Services，我們不需要 API Key，移除相關檢查：
 
 ```javascript
-// 找到這段程式碼並替換
-const GOOGLE_CLIENT_ID = '你的_CLIENT_ID.apps.googleusercontent.com';
-const GOOGLE_API_KEY = '你的_API_金鑰';
+// 移除這行，因為不需要 API Key
+// const GOOGLE_API_KEY = 'AIzaSyABC123def456GHI789jkl012MNO345pqr';
 ```
 
-## 🌐 部署給其他人使用
+## 🌐 部署方式（超簡單）
 
-### 方案 1：簡單分享（推薦）
-1. 完成上述設定後，直接分享 `whisper_web_app.html` 檔案
-2. 用戶只需要：
-   - 用瀏覽器開啟檔案
-   - 輸入 OpenAI API Key
-   - 點擊「連接 Google Drive」授權
-   - 開始使用！
+### 方案 1：本機使用（推薦）
+1. 設定好 Client ID 後
+2. 雙擊開啟 `whisper_web_app.html`
+3. 用戶直接在瀏覽器中使用！
 
-### 方案 2：架設網站
-1. 將檔案上傳到網頁伺服器
-2. 記得在 Google Cloud Console 的「已授權的 JavaScript 來源」加入你的網域
-3. 用戶可以直接透過網址存取
+### 方案 2：網站部署
+1. 上傳到任何網頁伺服器
+2. 在 Google Console 添加你的網域到「已授權的 JavaScript 來源」
+3. 用戶透過網址存取
 
-## ✅ 測試步驟
-1. 用瀏覽器開啟 `whisper_web_app.html`
-2. 設定 OpenAI API Key
-3. 點擊「連接 Google Drive」
-4. 授權你的 Google 帳號
-5. 進行語音轉錄測試
-6. 點擊「立即備份」確認檔案能成功儲存到 Google Drive
+## ✅ 一分鐘測試
+1. **開啟檔案**：用瀏覽器開啟 `whisper_web_app.html`
+2. **輸入 OpenAI Key**：設定你的 OpenAI API Key
+3. **連接雲端**：點擊「🔑 連接 Google Drive」
+4. **Google 授權**：會彈出 Google 登入視窗，選擇帳號授權
+5. **開始轉錄**：語音轉錄會自動分區顯示
+6. **備份測試**：點擊「💾 立即備份」，檔案會儲存到你的 Google Drive
 
-## 🔒 安全性注意事項
-- ✅ OAuth 2.0 是安全的授權機制
-- ✅ 用戶只授權存取他們自己的 Google Drive
-- ✅ API 金鑰只用於存取 Google Drive API
-- ✅ OpenAI API Key 存在用戶本地瀏覽器，不會傳送給你
+## 🔒 安全性保證
+- ✅ **OAuth 2.0 標準**：使用 Google 官方安全授權機制
+- ✅ **個人權限**：每個用戶只能存取自己的 Google Drive
+- ✅ **無需 API Key**：根據官方文檔，只需要 Client ID
+- ✅ **本地儲存**：OpenAI API Key 只存在用戶本地瀏覽器
 
 ## 🎯 用戶使用流程
 1. **開啟應用** → 用瀏覽器開啟 HTML 檔案
@@ -84,17 +96,20 @@ const GOOGLE_API_KEY = '你的_API_金鑰';
 
 ## 🆘 常見問題
 
-**Q: 用戶看到「請先設定 Google Client ID」怎麼辦？**
-A: 這表示你還沒有完成步驟 5，需要更新程式碼中的 Client ID 和 API Key。
+**Q: 看到「請先設定正確的 Google Client ID」怎麼辦？**
+A: 請完成步驟 6，將程式碼中的 `你的_CLIENT_ID.apps.googleusercontent.com` 替換為你的真實 Client ID。
 
 **Q: 授權時出現「此應用程式未經驗證」？**
-A: 這是正常的，點擊「進階」→「前往 Whisper語音轉文字（不安全）」即可。
+A: 正常現象！點擊「進階」→「前往 Whisper 語音轉文字（不安全）」即可使用。
 
-**Q: 可以讓多少人使用？**
-A: Google Drive API 有使用配額限制，一般個人使用綽綽有餘。如需大量使用，可能需要升級到付費方案。
+**Q: 為什麼不需要 API Key？**
+A: 根據 [Google Identity 官方文檔](https://developers.google.com/identity/gsi/web/guides/get-google-api-clientid?hl=zh-tw)，使用 Google Identity Services 只需要 Client ID，比傳統方式更簡單！
 
-**Q: 用戶的資料安全嗎？**
-A: 完全安全！每個用戶只能存取自己的 Google Drive，且所有授權都是透過 Google 官方 OAuth 機制。
+**Q: 本機開啟檔案可以連接 Google Drive 嗎？**
+A: 可以！我們已經設定好 `file://` 協議支援，直接雙擊 HTML 檔案就能使用。
+
+**Q: 可以給多少人使用？**
+A: Google Drive API 免費配額很充裕，個人使用完全夠用。商業用途可考慮升級方案。
 
 ---
 
