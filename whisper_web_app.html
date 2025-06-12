@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI Whisper 即時語音轉文字</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .api-setup {
+            background: #e3f2fd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .hidden {
+            display: none;
+        }
+        input, button, select {
+            padding: 12px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+        }
+        input[type="text"], input[type="password"] {
+            width: 100%;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .record-button {
+            background: #f44336;
+            font-size: 18px;
+            padding: 15px 30px;
+            border-radius: 50px;
+            margin: 20px 0;
+        }
+        .record-button.recording {
+            background: #ff9800;
+            animation: pulse 1s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .sensitivity-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .sensitivity-control select {
+            width: 120px;
+            margin: 0;
+        }
+        .result-area {
+            background: #f9f9f9;
+            padding: 20px;
+            border-radius: 6px;
+            margin-top: 20px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        .transcript-item {
+            margin-bottom: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #4CAF50;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .transcript-item.processing {
+            border-left-color: #ff9800;
+            opacity: 0.7;
+        }
+        .timestamp {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+            font-weight: bold;
+        }
+        .text-content {
+            margin-bottom: 8px;
+        }
+        .chinese-text {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .english-text {
+            font-size: 14px;
+            color: #666;
+            font-style: italic;
+            border-top: 1px dotted #ccc;
+            padding-top: 5px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        .live-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #f44336;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.3; }
+            100% { opacity: 1; }
+        }
+        .stats {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+        }
+        .debug-info {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 10px;
+            border-radius: 6px;
+            margin: 10px 0;
+            font-size: 12px;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ OpenAI Whisper 即時語音轉文字</h1>
+        
+        <!-- API Key 設定區域 -->
+        <div id="apiSetup" class="api-setup">
+            <h3>🔑 首次設定 API Key</h3>
+            <p>請輸入你的 OpenAI API Key（只需設定一次）：</p>
+            <input type="password" id="apiKeyInput" placeholder="sk-..." />
+            <button onclick="saveApiKey()">儲存 API Key</button>
+            <p><small>API Key 會儲存在瀏覽器中，不會傳送到其他地方</small></p>
+        </div>
+
+        <!-- 主要功能區域 -->
+        <div id="mainApp" class="hidden">
+            <div class="status info">
+                <strong>✅ API Key 已設定完成</strong>
+                <button onclick="resetApiKey()" style="float: right; padding: 5px 10px; font-size: 12px;">重新設定</button>
+            </div>
+
+            <h3>🎵 即時語音轉文字（中英雙語）</h3>
+            
+            <!-- 控制面板 -->
+            <div class="controls">
+                <button id="recordButton" class="record-button" onclick="toggleRecording()">
+                    🎙️ 開始即時轉錄
+                </button>
+                
+                <div class="sensitivity-control">
+                    <label>靈敏度：</label>
+                    <select id="sensitivitySelect" onchange="updateSensitivity()">
+                        <option value="1">高靈敏 (1秒)</option>
+                        <option value="3" selected>一般 (3秒)</option>
+                        <option value="6">低靈敏 (6秒)</option>
+                    </select>
+                </div>
+                
+                <button onclick="clearTranscripts()" style="background: #666;">
+                    🗑️ 清除記錄
+                </button>
+            </div>
+
+            <!-- 錄音狀態 -->
+            <div id="recordingStatus"></div>
+
+            <!-- 除錯資訊 -->
+            <div id="debugInfo" class="debug-info hidden"></div>
+
+            <!-- 處理狀態 -->
+            <div id="statusDiv"></div>
+
+            <!-- 統計資訊 -->
+            <div id="statsDiv" class="stats hidden">
+                <span>已轉錄片段: <span id="segmentCount">0</span></span>
+                <span>API 呼叫次數: <span id="apiCallCount">0</span></span>
+                <span>總時長: <span id="totalDuration">00:00</span></span>
+                <span>當前間隔: <span id="currentInterval">3秒</span></span>
+            </div>
+
+            <!-- 結果顯示 -->
+            <div>
+                <h4>📝 即時轉錄結果：</h4>
+                <div id="resultArea" class="result-area">
+                    點擊 "開始即時轉錄" 開始語音識別...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let isRecording = false;
+        let mediaRecorder;
+        let audioChunks = [];
+        let apiKey = '';
+        let recordingInterval;
+        let segmentCount = 0;
+        let apiCallCount = 0;
+        let startTime;
+        let stream;
+        let currentIntervalMs = 3000; // 預設3秒
+        let activeRecorders = []; // 追蹤活躍的錄音器
+
+        // 頁面載入時檢查是否已有 API Key
+        window.onload = function() {
+            const savedApiKey = localStorage.getItem('openai_api_key');
+            if (savedApiKey) {
+                apiKey = savedApiKey;
+                document.getElementById('apiSetup').classList.add('hidden');
+                document.getElementById('mainApp').classList.remove('hidden');
+            }
+        };
+
+        // 儲存 API Key
+        function saveApiKey() {
+            const keyInput = document.getElementById('apiKeyInput');
+            const key = keyInput.value.trim();
+            
+            if (!key.startsWith('sk-')) {
+                showStatus('請輸入有效的 OpenAI API Key（以 sk- 開頭）', 'error');
+                return;
+            }
+            
+            apiKey = key;
+            localStorage.setItem('openai_api_key', key);
+            
+            document.getElementById('apiSetup').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            
+            showStatus('API Key 設定成功！', 'success');
+        }
+
+        // 重新設定 API Key
+        function resetApiKey() {
+            if (isRecording) {
+                stopRecording();
+            }
+            localStorage.removeItem('openai_api_key');
+            apiKey = '';
+            document.getElementById('apiSetup').classList.remove('hidden');
+            document.getElementById('mainApp').classList.add('hidden');
+            document.getElementById('apiKeyInput').value = '';
+        }
+
+        // 更新靈敏度設定
+        function updateSensitivity() {
+            const select = document.getElementById('sensitivitySelect');
+            const newInterval = parseInt(select.value) * 1000;
+            currentIntervalMs = newInterval;
+            
+            document.getElementById('currentInterval').textContent = `${select.value}秒`;
+            
+            // 如果正在錄音，重新啟動錄音循環
+            if (isRecording) {
+                debugLog(`靈敏度已更改為 ${select.value} 秒，重新啟動錄音循環`);
+                restartRecordingCycle();
+            }
+        }
+
+        // 除錯訊息
+        function debugLog(message) {
+            const debugDiv = document.getElementById('debugInfo');
+            const timestamp = new Date().toLocaleTimeString();
+            debugDiv.innerHTML = `${timestamp}: ${message}`;
+            debugDiv.classList.remove('hidden');
+            
+            // 3秒後隱藏除錯訊息
+            setTimeout(() => {
+                if (debugDiv.textContent.includes(message)) {
+                    debugDiv.classList.add('hidden');
+                }
+            }, 3000);
+        }
+
+        // 顯示狀態訊息
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('statusDiv');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+            
+            if (type !== 'error') {
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 3000);
+            }
+        }
+
+        // 更新統計資訊
+        function updateStats() {
+            document.getElementById('segmentCount').textContent = segmentCount;
+            document.getElementById('apiCallCount').textContent = apiCallCount;
+            
+            if (startTime) {
+                const duration = Math.floor((Date.now() - startTime) / 1000);
+                const minutes = Math.floor(duration / 60);
+                const seconds = duration % 60;
+                document.getElementById('totalDuration').textContent = 
+                    `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }
+
+        // 開始/停止錄音
+        async function toggleRecording() {
+            if (!isRecording) {
+                await startRecording();
+            } else {
+                stopRecording();
+            }
+        }
+
+        // 開始錄音
+        async function startRecording() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        sampleRate: 16000,
+                        channelCount: 1,
+                        echoCancellation: true,
+                        noiseSuppression: true
+                    }
+                });
+                
+                const recordButton = document.getElementById('recordButton');
+                const intervalSeconds = currentIntervalMs / 1000;
+                
+                isRecording = true;
+                startTime = Date.now();
+                segmentCount = 0;
+                apiCallCount = 0;
+                activeRecorders = [];
+                
+                recordButton.textContent = '⏹️ 停止轉錄';
+                recordButton.classList.add('recording');
+                
+                document.getElementById('recordingStatus').innerHTML = 
+                    `<div class="status info"><span class="live-indicator"></span>正在進行即時轉錄（每 ${intervalSeconds} 秒發送一次）</div>`;
+                
+                document.getElementById('statsDiv').classList.remove('hidden');
+                
+                debugLog(`開始錄音，間隔: ${intervalSeconds} 秒`);
+                
+                // 開始定期錄音和轉錄
+                startRecordingCycle();
+                
+                showStatus('即時轉錄已開始！', 'success');
+                
+            } catch (error) {
+                showStatus('無法存取麥克風：' + error.message, 'error');
+                debugLog('麥克風錯誤: ' + error.message);
+            }
+        }
+
+        // 停止錄音
+        function stopRecording() {
+            isRecording = false;
+            
+            debugLog('停止錄音中...');
+            
+            // 清除定時器
+            if (recordingInterval) {
+                clearInterval(recordingInterval);
+                recordingInterval = null;
+            }
+            
+            // 停止所有活躍的錄音器
+            activeRecorders.forEach(recorder => {
+                if (recorder && recorder.state !== 'inactive') {
+                    recorder.stop();
+                }
+            });
+            activeRecorders = [];
+            
+            // 停止媒體流
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+            }
+            
+            const recordButton = document.getElementById('recordButton');
+            recordButton.textContent = '🎙️ 開始即時轉錄';
+            recordButton.classList.remove('recording');
+            
+            document.getElementById('recordingStatus').innerHTML = '';
+            showStatus('即時轉錄已停止', 'info');
+            debugLog('錄音已完全停止');
+        }
+
+        // 重新啟動錄音循環
+        function restartRecordingCycle() {
+            if (recordingInterval) {
+                clearInterval(recordingInterval);
+            }
+            
+            // 停止當前的錄音器
+            activeRecorders.forEach(recorder => {
+                if (recorder && recorder.state === 'recording') {
+                    recorder.stop();
+                }
+            });
+            
+            startRecordingCycle();
+        }
+
+        // 開始錄音循環
+        function startRecordingCycle() {
+            let segmentId = 0;
+            
+            function recordSegment() {
+                if (!isRecording || !stream) {
+                    debugLog('錄音已停止或無媒體流，退出錄音循環');
+                    return;
+                }
+                
+                segmentId++;
+                const currentSegmentId = segmentId;
+                audioChunks = [];
+                
+                debugLog(`開始錄音片段 ${currentSegmentId}`);
+                
+                const recorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+                
+                activeRecorders.push(recorder);
+                
+                recorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+                
+                recorder.onstop = () => {
+                    debugLog(`片段 ${currentSegmentId} 錄音完成，數據大小: ${audioChunks.length} 塊`);
+                    
+                    // 從活躍列表移除
+                    const index = activeRecorders.indexOf(recorder);
+                    if (index > -1) {
+                        activeRecorders.splice(index, 1);
+                    }
+                    
+                    if (audioChunks.length > 0 && isRecording) {
+                        const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                        debugLog(`片段 ${currentSegmentId} 轉為 Blob，大小: ${audioBlob.size} bytes`);
+                        
+                        segmentCount++;
+                        updateStats();
+                        transcribeAudioSegment(audioBlob, currentSegmentId);
+                    }
+                };
+                
+                recorder.onerror = (event) => {
+                    debugLog(`錄音器錯誤: ${event.error}`);
+                };
+                
+                try {
+                    recorder.start();
+                    debugLog(`片段 ${currentSegmentId} 開始錄音`);
+                    
+                    // 在指定時間後停止錄音
+                    setTimeout(() => {
+                        if (recorder.state === 'recording') {
+                            recorder.stop();
+                            debugLog(`片段 ${currentSegmentId} 錄音時間到，停止錄音`);
+                        }
+                    }, currentIntervalMs - 100);
+                    
+                } catch (error) {
+                    debugLog(`啟動錄音器失敗: ${error.message}`);
+                    showStatus('錄音失敗：' + error.message, 'error');
+                }
+            }
+            
+            // 立即開始第一個片段
+            recordSegment();
+            
+            // 設定定期錄音
+            recordingInterval = setInterval(() => {
+                if (isRecording) {
+                    recordSegment();
+                } else {
+                    clearInterval(recordingInterval);
+                }
+            }, currentIntervalMs);
+            
+            debugLog(`錄音循環已啟動，間隔: ${currentIntervalMs}ms`);
+        }
+
+        // 轉錄音頻片段（雙語版本）
+        async function transcribeAudioSegment(audioData, segmentId) {
+            const resultArea = document.getElementById('resultArea');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            debugLog(`開始轉錄片段 ${segmentId}`);
+            
+            // 添加處理中的項目
+            const processingItem = document.createElement('div');
+            processingItem.className = 'transcript-item processing';
+            processingItem.id = `segment-${segmentId}`;
+            processingItem.innerHTML = `
+                <div class="timestamp">${timestamp} - 片段 ${segmentId}</div>
+                <div class="text-content">🔄 正在轉錄中...</div>
+            `;
+            
+            if (resultArea.firstChild && resultArea.firstChild.textContent.includes('點擊')) {
+                resultArea.innerHTML = '';
+            }
+            
+            resultArea.insertBefore(processingItem, resultArea.firstChild);
+            resultArea.scrollTop = 0;
+            
+            try {
+                // 同時發送中文和英文請求
+                const [chineseResult, englishResult] = await Promise.all([
+                    transcribeWithLanguage(audioData, 'zh', segmentId),
+                    transcribeWithLanguage(audioData, 'en', segmentId)
+                ]);
+                
+                apiCallCount += 2; // 兩次API呼叫
+                updateStats();
+                
+                // 更新結果顯示
+                processingItem.className = 'transcript-item';
+                
+                const chineseText = chineseResult.text.trim();
+                const englishText = englishResult.text.trim();
+                
+                if (chineseText || englishText) {
+                    processingItem.innerHTML = `
+                        <div class="timestamp">${timestamp} - 片段 ${segmentId}</div>
+                        <div class="text-content">
+                            ${chineseText ? `<div class="chinese-text">🇹🇼 ${chineseText}</div>` : ''}
+                            ${englishText ? `<div class="english-text">🇺🇸 ${englishText}</div>` : ''}
+                        </div>
+                    `;
+                } else {
+                    processingItem.innerHTML = `
+                        <div class="timestamp">${timestamp} - 片段 ${segmentId}</div>
+                        <div class="text-content" style="color: #666; font-style: italic;">（無法識別語音）</div>
+                    `;
+                }
+                
+                debugLog(`片段 ${segmentId} 轉錄完成`);
+                
+            } catch (error) {
+                processingItem.className = 'transcript-item';
+                processingItem.innerHTML = `
+                    <div class="timestamp">${timestamp} - 片段 ${segmentId}</div>
+                    <div class="text-content" style="color: #f44336;">❌ 轉換失敗：${error.message}</div>
+                `;
+                debugLog(`片段 ${segmentId} 轉錄失敗: ${error.message}`);
+                console.error('轉換錯誤：', error);
+            }
+        }
+
+        // 使用指定語言轉錄
+        async function transcribeWithLanguage(audioData, language, segmentId) {
+            const formData = new FormData();
+            formData.append('file', audioData, `audio-${segmentId}-${language}.webm`);
+            formData.append('model', 'whisper-1');
+            formData.append('language', language);
+            
+            const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: formData
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(`${language.toUpperCase()} 轉換失敗: ${error.error?.message || '未知錯誤'}`);
+            }
+            
+            return await response.json();
+        }
+
+        // 清除轉錄記錄
+        function clearTranscripts() {
+            document.getElementById('resultArea').innerHTML = '等待語音輸入...';
+            segmentCount = 0;
+            apiCallCount = 0;
+            updateStats();
+            debugLog('轉錄記錄已清除');
+        }
+    </script>
+</body>
+</html>
